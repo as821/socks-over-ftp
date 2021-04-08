@@ -1,5 +1,4 @@
 
-from ftplib import FTP
 import io
 
 
@@ -23,7 +22,9 @@ def list_files(ftp):
 def upload_binary_data(ftp, file_name, data):
     """Upload binary data to the FTP server with the specified filename.
     Will overwrite any existing file with the specified name."""
-    ftp.storbinary("STOR " + file_name, io.BytesIO(data))
+    cmd = "STOR " + str(file_name)
+    b = io.BytesIO(data)
+    ftp.storbinary(cmd, b)
 
 
 
@@ -40,5 +41,6 @@ def get_file_contents(ftp, file_name):
         for i in byte_store:
             local_bytes += i
         return local_bytes
-    except Exception:
+    except Exception as e:
+        logging.debug("error downloading file {}: {}".format(filename, e))
         return None
