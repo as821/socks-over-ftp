@@ -4,7 +4,8 @@ import logging
 import yaml
 
 
-PROXY_HEARTBEAT_TIMEOUT = 300       # 5 minutes
+PROXY_HEARTBEAT_TIMEOUT = 300   # 5 minutes
+
 
 
 def is_proxy_descriptor(filename):
@@ -25,7 +26,7 @@ def parse_proxy_descriptor(data):
     try:
         if isinstance(data, (bytes, bytearray)):
             data = data.decode()
-        d = yaml.load(data)
+        d = yaml.load(data, Loader=yaml.FullLoader)
         return d['key'], int(d['heartbeat'])
     except Exception as e:
         logging.debug("error processing proxy descriptor file {}: {}".format(filename, e))
@@ -37,5 +38,21 @@ def generate_proxy_descriptor(key):
     proxy descriptor file."""
     d = {'key':key._public_key, 'heartbeat':int(time.time())}
     return yaml.dump(d).encode()
+
+
+
+def parse_tunnel_filename(filename):
+    """Return session ID, direction, and sequence number of a tunnel filename. Returns
+    None for all return fields if filename has an invalid formatting"""
+    try:
+        if '_' in filename and filename.count('_') == 2:
+            s = filename.split('_')
+            c_id = int(s[0])
+            direction = int(s[1])
+            seq = int(s[2])
+            return c_id, direction, seq
+    except Exception:
+        pass
+    return None, None, None
 
 
