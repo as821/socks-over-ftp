@@ -7,7 +7,6 @@ current requirements:
     PyNaCl
 
 TODO
-*   how to have proxy wait for connections? --> polling loop?
-*   finish tunnel handshake on client and proxy sides
 *   implement send/recv for both client and proxy
+*   connections with applications using the tunnel (probably covered by secretsocks, not sure)
 *   ... everything else
