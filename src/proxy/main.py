@@ -7,17 +7,25 @@ import logging
 import sys
 import time
 import threading
-import queue as Queue
 
 import nacl.utils
 import nacl.secret
 from nacl.public import PrivateKey, SealedBox
 
+# from secretsocks example
+PY3 = False
+if sys.version_info[0] == 3:
+    import queue as Queue
+    PY3 = True
+else:
+    import Queue
+    range = xrange
+
 
 PROXY_POLL_FREQ = 5    # TODO should increase this, is just small for testing
 
 
-class FTPSocksProxy(secretsocks.Client):
+class FTPSocksProxy(secretsocks.Server):
     def __init__(self, server_addr, username, password, tunnel_dir, pub_file=None, priv_file=None):
         # basic set up
         print("Proxy started")
@@ -120,7 +128,10 @@ class FTPSocksProxy(secretsocks.Client):
 
                 # write received data to recvbuf
                 if data is not None:
-                    self.recvbuf.put(self._decrypt_data(data))
+                    d = self._decrypt_data(data)
+                    print(d)
+                    sys.stdout.flush()
+                    self.recvbuf.put(d)
 
                 # update heartbeat if needed
                 elif self.heart + PROXY_HEARTBEAT_TIMEOUT < time.time():
@@ -150,7 +161,7 @@ class FTPSocksProxy(secretsocks.Client):
 
             # send data over channel (write to file with appropriate name
             try:
-                    # create file
+                # create file
                 ftps = self._login_ftp()
                 upload_binary_data(ftps, str(self.session_id) + "_1_" + str(self.outgoing_seq), self._encrypt_data(data))
                 self.outgoing_seq += 1
@@ -250,6 +261,7 @@ class FTPSocksProxy(secretsocks.Client):
 
 
 if __name__ == '__main__':
+    secretsocks.set_debug(True)
     proxy = FTPSocksProxy('127.0.0.1', 'user', '12345', '/')
     while True:     # busy wait
         time.sleep(60)

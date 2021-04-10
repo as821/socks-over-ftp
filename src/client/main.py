@@ -7,7 +7,15 @@ import logging
 import sys
 import time
 import threading
-import queue as Queue
+
+# from secretsocks example
+PY3 = False
+if sys.version_info[0] == 3:
+    import queue as Queue
+    PY3 = True
+else:
+    import Queue
+    range = xrange
 
 import nacl.utils
 import nacl.secret
@@ -91,6 +99,7 @@ class FTPSocksClient(secretsocks.Client):
             data = self._generate_handshake_file()
             filename = self.session_id + '_0_0'
             upload_binary_data(ftps, filename, data)
+            self.outgoing_seq += 1
 
         # wait for proxy's ACK message
         start = time.time()
@@ -102,11 +111,13 @@ class FTPSocksClient(secretsocks.Client):
                 logging.error("proxy timed out before completing handshake")
                 sys.exit(-1)
             time.sleep(CLIENT_POLL_FREQ)
+        self.incoming_seq += 1
 
         ### Tunnel is set up ###
         print("Tunnel set up (proxy id: {})".format(self.proxy_id))
         sys.stdout.flush()
         self.heartbeat = time.time()
+        self.start()
 
 
 
@@ -143,7 +154,8 @@ class FTPSocksClient(secretsocks.Client):
                 # write received data to recvbuf
                 if data is not None:
                     # decrypt data with session key
-                    self.recvbuf.put(self._decrypt_data(data))
+                    d = self._decrypt_data(data)
+                    self.recvbuf.put(d)
                 elif time.time()  > self.heartbeat + PROXY_HEARTBEAT_TIMEOUT:
                     # channel has timed out
                     raise ValueError("channel has timed out")
@@ -152,7 +164,6 @@ class FTPSocksClient(secretsocks.Client):
                 self._kill_self()
                 logging.error("recv thread exception: {}".format(e))
         logging.info("recv thread exit")
-        self.start()
 
 
 
@@ -265,7 +276,7 @@ class FTPSocksClient(secretsocks.Client):
         """Encrypt data with the session key"""
         session_box = nacl.secret.SecretBox(self.session_key)
         d =  session_box.encrypt(data)
-        print(d)
+        print(data)
         sys.stdout.flush()
         return d
 
@@ -278,9 +289,10 @@ class FTPSocksClient(secretsocks.Client):
 
 
 if __name__ == '__main__':
+    secretsocks.set_debug(True)
     client = FTPSocksClient('127.0.0.1', 'user', '12345', '/')
 
     # Start the standard listener with our client
-    print('Starting socks server...')
+    print('Starting socks server on port 1080...')
     listener = secretsocks.Listener(client, host='127.0.0.1', port=1080)
     listener.wait()

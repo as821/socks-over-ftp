@@ -17,8 +17,8 @@ class Server():
     def __init__(self):
         self.recvbuf = Queue.Queue()
         self.writebuf = Queue.Queue()
-        self._conns = [254]
-        self._conns.extend([None]*254)
+        self._conns = [2047]
+        self._conns.extend([None]*2047)
 
     def recv(self):
         raise NotImplementedError
