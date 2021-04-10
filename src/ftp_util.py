@@ -44,3 +44,16 @@ def get_file_contents(ftp, file_name):
     except Exception as e:
         logging.debug("error downloading file {}: {}".format(filename, e))
         return None
+
+
+
+def delete_file(ftp, filename):
+    """If file exists in the current working directory, delete the file"""
+    try:
+        ftp.delete(filename)
+    except Exception as e:
+        logging.debug("error deleting file {}: {}".format(filename, e))
+
+
+
+
