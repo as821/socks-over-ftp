@@ -140,7 +140,7 @@ class FTPSocksProxy(secretsocks.Server):
                     self.heart = time.time()
                     self._logout_ftp(ftps)
 
-                time.sleep(PROXY_POLL_FREQ)
+            #     time.sleep(PROXY_POLL_FREQ)   # a quick fix to allow Firefox to fetch in a reasonable amount of time
             except Exception as e:
                 self._kill_self()
                 logging.error("recv thread exception: {}".format(e))

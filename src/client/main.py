@@ -34,6 +34,7 @@ class FTPSocksClient(secretsocks.Client):
         super().__init__()
         self.alive = True
         self.alive_lock = threading.Lock()
+        self.ftp_account_lock = threading.Lock()    # avoid simultaneous logins with same credentials
 
         self.addr = server_addr
         self.username = username
@@ -50,56 +51,47 @@ class FTPSocksClient(secretsocks.Client):
 
 
 
-        with FTP_TLS(self.addr, self.username, self.password) as ftps:
-            # set up secure connection
-            ftps.prot_p()
+        # check for proxy descriptor files, determine max session ID
+        ftps = self._login_ftp()
+        print("Searching for proxies...")
+        sys.stdout.flush()
+        files = list_files(ftps)
+        max_id = -1
+        for f in files:
+            # parse session ID from tunnel files (used to determine session ID for this client)
+            s_id, _, _seq = parse_tunnel_filename(f[0])
+            if s_id is not None and s_id > max_id:
+                max_id = s_id
 
-            # verify that tunnel_dir exists
-            try:
-                ftps.cwd(self.tunnel_dir)
-            except all_errors:
-                logging.error("tunnel directory does not exist")
-                sys.exit(-1)
+            if is_proxy_descriptor(f[0]):
+                # parse proxy descriptor file to see if its heartbeat is valid
+                key, heartbeat = parse_proxy_descriptor( get_file_contents(ftps, f[0]) )
+                if key is None and heartbeat is None:
+                    continue
 
-            # check for proxy descriptor files, determine max session ID
-            print("Searching for proxies...")
-            sys.stdout.flush()
-            files = list_files(ftps)
-            max_id = -1
-            for f in files:
-                # parse session ID from tunnel files (used to determine session ID for this client)
-                s_id, _, _seq = parse_tunnel_filename(f[0])
-                if s_id is not None and s_id > max_id:
-                    max_id = s_id
+                # validate heartbeat
+                if heartbeat + PROXY_HEARTBEAT_TIMEOUT < time.time():
+                    continue
 
-                if is_proxy_descriptor(f[0]):
-                    # parse proxy descriptor file to see if its heartbeat is valid
-                    key, heartbeat = parse_proxy_descriptor( get_file_contents(ftps, f[0]) )
-                    if key is None and heartbeat is None:
-                        continue
+                # accept the first proxy we find (not great for load balancing, but it works for now)
+                self.proxy_id = int(f[0])
+                self.proxy_key = key
 
-                    # validate heartbeat
-                    if heartbeat + PROXY_HEARTBEAT_TIMEOUT < time.time():
-                        continue
+        # error if no proxies are available
+        if self.proxy_id is None:
+            logging.error("no valid proxies in tunnel directory")
+            sys.exit(-1)
 
-                    # accept the first proxy we find (not great for load balancing, but it works for now)
-                    self.proxy_id = int(f[0])
-                    self.proxy_key = key
-
-            # error if no proxies are available
-            if self.proxy_id is None:
-                logging.error("no valid proxies in tunnel directory")
-                sys.exit(-1)
-
-            # start tunnel handshake by writing file with session key encrypted with proxy public key
-            print("Suitable proxy found")
-            sys.stdout.flush()
-            self.session_id = str(max_id + 1)
-            self._generate_session_key()
-            data = self._generate_handshake_file()
-            filename = self.session_id + '_0_0'
-            upload_binary_data(ftps, filename, data)
-            self.outgoing_seq += 1
+        # start tunnel handshake by writing file with session key encrypted with proxy public key
+        print("Suitable proxy found")
+        sys.stdout.flush()
+        self.session_id = str(max_id + 1)
+        self._generate_session_key()
+        data = self._generate_handshake_file()
+        filename = self.session_id + '_0_0'
+        upload_binary_data(ftps, filename, data)
+        self.outgoing_seq += 1
+        self._logout_ftp(ftps)
 
         # wait for proxy's ACK message
         start = time.time()
@@ -127,29 +119,22 @@ class FTPSocksClient(secretsocks.Client):
             try:
                 # check if there is a valid tunnel file to read
                 data = None
-                with FTP_TLS(self.addr, self.username, self.password) as ftps:
-                    # set up secure connection
-                    ftps.prot_p()
+                ftps = self._login_ftp()
 
-                    # verify that tunnel_dir exists
-                    try:
-                        ftps.cwd(self.tunnel_dir)
-                    except all_errors:
-                        raise ValueError("tunnel directory does not exist")
+                # check files
+                files = list_files(ftps)
+                for f in files:
+                    if self._is_next_inbound_packet(f[0]):
+                        # get file contents
+                        self.incoming_seq += 1
+                        data = get_file_contents(ftps, f[0])
+                        if data is None:
+                            raise ValueError("get_file_contents returned None.  Check debugging output.")
 
-                    # check files
-                    files = list_files(ftps)
-                    for f in files:
-                        if self._is_next_inbound_packet(f[0]):
-                            # get file contents
-                            self.incoming_seq += 1
-                            data = get_file_contents(ftps, f[0])
-                            if data is None:
-                                raise ValueError("get_file_contents returned None.  Check debugging output.")
-
-                            # delete file
-                            delete_file(ftps, f[0])
-                            break
+                        # delete file
+                        delete_file(ftps, f[0])
+                        break
+                self._logout_ftp(ftps)
 
                 # write received data to recvbuf
                 if data is not None:
@@ -159,7 +144,7 @@ class FTPSocksClient(secretsocks.Client):
                 elif time.time()  > self.heartbeat + PROXY_HEARTBEAT_TIMEOUT:
                     # channel has timed out
                     raise ValueError("channel has timed out")
-                time.sleep(CLIENT_POLL_FREQ)
+            #     time.sleep(CLIENT_POLL_FREQ)      # a quick fix to allow Firefox to fetch in a reasonable amount of time
             except Exception as e:
                 self._kill_self()
                 logging.error("recv thread exception: {}".format(e))
@@ -178,19 +163,11 @@ class FTPSocksClient(secretsocks.Client):
 
             # send data over channel (write to file with appropriate name
             try:
-                with FTP_TLS(self.addr, self.username, self.password) as ftps:
-                    # set up secure connection
-                    ftps.prot_p()
-
-                    # verify that tunnel_dir exists
-                    try:
-                        ftps.cwd(self.tunnel_dir)
-                    except all_errors:
-                        raise ValueError("tunnel directory does not exist")
-
-                    # create file
-                    upload_binary_data(ftps, str(self.session_id) + "_0_" + str(self.outgoing_seq), self._encrypt_data(data))
-                    self.outgoing_seq += 1
+                # create file
+                ftps = self._login_ftp()
+                upload_binary_data(ftps, str(self.session_id) + "_0_" + str(self.outgoing_seq), self._encrypt_data(data))
+                self.outgoing_seq += 1
+                self._logout_ftp(ftps)
             except Exception as e:
                 self._kill_self()
                 logging.error("write thread exception: {}".format(e))
@@ -228,20 +205,14 @@ class FTPSocksClient(secretsocks.Client):
     def _poll_ack_file(self):
         """Check if a client has created a handshake file.  If so, parse the file and store
         the session key"""
-        with FTP_TLS(self.addr, self.username, self.password) as ftps:
-            # set up connection
-            ftps.prot_p()
-            try:
-                ftps.cwd(self.tunnel_dir)
-            except all_errors:
-                logging.error("tunnel directory does not exist")
-                sys.exit(-1)
-
             # check for file with valid name
-            files = list_files(ftps)
-            for f in files:
-                if self._is_ack_file(ftps, f[0]):
-                    return True
+        ftps = self._login_ftp()
+        files = list_files(ftps)
+        for f in files:
+            if self._is_ack_file(ftps, f[0]):
+                self._logout_ftp(ftps)
+                return True
+        self._logout_ftp(ftps)
         return False
 
 
@@ -285,6 +256,28 @@ class FTPSocksClient(secretsocks.Client):
         """Decrypt data with the session key"""
         session_box = nacl.secret.SecretBox(self.session_key)
         return session_box.decrypt(data)
+
+
+
+
+    def _login_ftp(self):
+        # set up secure connection
+        self.ftp_account_lock.acquire()
+        ftps = FTP_TLS(self.addr, self.username, self.password)
+        ftps.prot_p()
+
+        # verify that tunnel_dir exists
+        try:
+            ftps.cwd(self.tunnel_dir)
+        except all_errors:
+            raise ValueError("tunnel directory does not exist")
+        return ftps
+
+
+
+    def _logout_ftp(self, ftps):
+        ftps.quit()
+        self.ftp_account_lock.release()
 
 
 
