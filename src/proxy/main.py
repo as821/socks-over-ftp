@@ -1,12 +1,13 @@
-
-from ftplib import FTP_TLS, all_errors, error_perm
-from ftp_util import list_files, upload_binary_data, get_file_contents, delete_file
-from tunnel_util import is_proxy_descriptor, generate_proxy_descriptor, parse_tunnel_filename, PROXY_HEARTBEAT_TIMEOUT
-import secretsocks
+import argparse
 import logging
 import sys
 import time
 import threading
+
+from ftplib import FTP, FTP_TLS, all_errors, error_perm
+from ftp_util import list_files, upload_binary_data, get_file_contents, delete_file
+from tunnel_util import is_proxy_descriptor, generate_proxy_descriptor, parse_tunnel_filename, PROXY_HEARTBEAT_TIMEOUT
+import secretsocks
 
 import nacl.utils
 import nacl.secret
@@ -26,7 +27,7 @@ PROXY_POLL_FREQ = 5    # TODO should increase this, is just small for testing
 
 
 class FTPSocksProxy(secretsocks.Server):
-    def __init__(self, server_addr, username, password, tunnel_dir, pub_file=None, priv_file=None):
+    def __init__(self, server_addr, username, password, use_plain, tunnel_dir, pub_file=None, priv_file=None):
         # basic set up
         print("Proxy started")
         sys.stdout.flush()
@@ -34,6 +35,7 @@ class FTPSocksProxy(secretsocks.Server):
         self.addr = server_addr
         self.username = username
         self.password = password
+        self.use_plain = use_plain
         self.tunnel_dir = tunnel_dir
 
         self.heart = -1
@@ -238,12 +240,15 @@ class FTPSocksProxy(secretsocks.Server):
         self.alive = False
         self.alive_lock.release()
 
-
     def _login_ftp(self):
         # set up secure connection
         self.ftp_account_lock.acquire()
-        ftps = FTP_TLS(self.addr, self.username, self.password)
-        ftps.prot_p()
+
+        if self.use_plain:
+            ftps = FTP(self.addr, self.username, self.password)
+        else:
+            ftps = FTP_TLS(self.addr, self.username, self.password)
+            ftps.prot_p()
 
         # verify that tunnel_dir exists
         try:
@@ -257,13 +262,23 @@ class FTPSocksProxy(secretsocks.Server):
         ftps.quit()
         self.ftp_account_lock.release()
 
-
-
-
-if __name__ == '__main__':
+def main(args):
     secretsocks.set_debug(True)
-    proxy = FTPSocksProxy('127.0.0.1', 'user', '12345', '/')
+    client = FTPSocksProxy(args.server_ipv4_addr,
+                            args.username,
+                            args.password,
+                            args.use_plain,
+                            'xfer')
     while True:     # busy wait
         time.sleep(60)
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("server_ipv4_addr")
+    parser.add_argument("username")
+    parser.add_argument("password")
+    parser.add_argument("--use_plain", action="store_true", default=False)
+    return parser.parse_args()
 
+if __name__ == '__main__':
+    main(parse_args())

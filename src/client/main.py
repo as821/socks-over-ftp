@@ -1,12 +1,13 @@
-
-from ftplib import FTP_TLS, all_errors, error_perm
-from ftp_util import list_files, upload_binary_data, get_file_contents, delete_file
-from tunnel_util import is_proxy_descriptor, parse_proxy_descriptor, parse_tunnel_filename, PROXY_HEARTBEAT_TIMEOUT
-import secretsocks
+import argparse
 import logging
 import sys
 import time
 import threading
+
+from ftplib import FTP, FTP_TLS, all_errors, error_perm
+from ftp_util import list_files, upload_binary_data, get_file_contents, delete_file
+from tunnel_util import is_proxy_descriptor, parse_proxy_descriptor, parse_tunnel_filename, PROXY_HEARTBEAT_TIMEOUT
+import secretsocks
 
 # from secretsocks example
 PY3 = False
@@ -26,7 +27,7 @@ CLIENT_POLL_FREQ = 5
 
 
 class FTPSocksClient(secretsocks.Client):
-    def __init__(self, server_addr, username, password, tunnel_dir):
+    def __init__(self, server_addr, username, password, use_plain, tunnel_dir):
         """Set up tunnel when this class is instantiated"""
         # basic set up
         print("Client started")
@@ -49,7 +50,7 @@ class FTPSocksClient(secretsocks.Client):
         self.incoming_seq = 0
         self.heartbeat = -1
 
-
+        self.use_plain = use_plain
 
         # check for proxy descriptor files, determine max session ID
         ftps = self._login_ftp()
@@ -263,8 +264,12 @@ class FTPSocksClient(secretsocks.Client):
     def _login_ftp(self):
         # set up secure connection
         self.ftp_account_lock.acquire()
-        ftps = FTP_TLS(self.addr, self.username, self.password)
-        ftps.prot_p()
+
+        if self.use_plain:
+            ftps = FTP(self.addr, self.username, self.password)
+        else:
+            ftps = FTP_TLS(self.addr, self.username, self.password)
+            ftps.prot_p()
 
         # verify that tunnel_dir exists
         try:
@@ -281,11 +286,26 @@ class FTPSocksClient(secretsocks.Client):
 
 
 
-if __name__ == '__main__':
+def main(args):
     secretsocks.set_debug(True)
-    client = FTPSocksClient('127.0.0.1', 'user', '12345', '/')
+    client = FTPSocksClient(args.server_ipv4_addr,
+                            args.username,
+                            args.password,
+                            args.use_plain,
+                            'xfer')
 
     # Start the standard listener with our client
     print('Starting socks server on port 1080...')
     listener = secretsocks.Listener(client, host='127.0.0.1', port=1080)
     listener.wait()
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("server_ipv4_addr")
+    parser.add_argument("username")
+    parser.add_argument("password")
+    parser.add_argument("--use_plain", action="store_true", default=False)
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    main(parse_args())
