@@ -36,6 +36,7 @@ class FTPSocksClient(secretsocks.Client):
         self.alive = True
         self.alive_lock = threading.Lock()
         self.ftp_account_lock = threading.Lock()    # avoid simultaneous logins with same credentials
+        self.xmit_lock = threading.Lock()    # avoid simultaneous logins with same credentials
 
         self.addr = server_addr
         self.username = username
@@ -53,10 +54,11 @@ class FTPSocksClient(secretsocks.Client):
         self.use_plain = use_plain
 
         # check for proxy descriptor files, determine max session ID
-        ftps = self._login_ftp()
+        # TODO: COMEBACK AND FIX
+        self.ftps = self._login_ftp()
         print("Searching for proxies...")
         sys.stdout.flush()
-        files = list_files(ftps)
+        files = list_files(self.ftps)
         max_id = -1
         for f in files:
             # parse session ID from tunnel files (used to determine session ID for this client)
@@ -66,7 +68,8 @@ class FTPSocksClient(secretsocks.Client):
 
             if is_proxy_descriptor(f[0]):
                 # parse proxy descriptor file to see if its heartbeat is valid
-                key, heartbeat = parse_proxy_descriptor( get_file_contents(ftps, f[0]) )
+                key, heartbeat = parse_proxy_descriptor(
+                    get_file_contents(self.ftps, f[0]) )
                 if key is None and heartbeat is None:
                     continue
 
@@ -90,9 +93,8 @@ class FTPSocksClient(secretsocks.Client):
         self._generate_session_key()
         data = self._generate_handshake_file()
         filename = self.session_id + '_0_0'
-        upload_binary_data(ftps, filename, data)
+        upload_binary_data(self.ftps, filename, data)
         self.outgoing_seq += 1
-        self._logout_ftp(ftps)
 
         # wait for proxy's ACK message
         start = time.time()
@@ -112,30 +114,28 @@ class FTPSocksClient(secretsocks.Client):
         self.heartbeat = time.time()
         self.start()
 
-
-
     def recv(self):
         """Receive data from the data channel and push it to the receive queue"""
         while self._am_i_alive():
             try:
                 # check if there is a valid tunnel file to read
                 data = None
-                ftps = self._login_ftp()
+                with self.xmit_lock:
+                    ftps = self.ftps
 
-                # check files
-                files = list_files(ftps)
-                for f in files:
-                    if self._is_next_inbound_packet(f[0]):
-                        # get file contents
-                        self.incoming_seq += 1
-                        data = get_file_contents(ftps, f[0])
-                        if data is None:
-                            raise ValueError("get_file_contents returned None.  Check debugging output.")
+                    # check files
+                    files = list_files(ftps)
+                    for f in files:
+                        if self._is_next_inbound_packet(f[0]):
+                            # get file contents
+                            self.incoming_seq += 1
+                            data = get_file_contents(ftps, f[0])
+                            if data is None:
+                                raise ValueError("get_file_contents returned None.  Check debugging output.")
 
-                        # delete file
-                        delete_file(ftps, f[0])
-                        break
-                self._logout_ftp(ftps)
+                            # delete file
+                            delete_file(ftps, f[0])
+                            break
 
                 # write received data to recvbuf
                 if data is not None:
@@ -163,15 +163,14 @@ class FTPSocksClient(secretsocks.Client):
                 continue
 
             # send data over channel (write to file with appropriate name
-            try:
-                # create file
-                ftps = self._login_ftp()
-                upload_binary_data(ftps, str(self.session_id) + "_0_" + str(self.outgoing_seq), self._encrypt_data(data))
-                self.outgoing_seq += 1
-                self._logout_ftp(ftps)
-            except Exception as e:
-                self._kill_self()
-                logging.error("write thread exception: {}".format(e))
+            with self.xmit_lock:
+                ftps = self.ftps
+                try:
+                    upload_binary_data(ftps, str(self.session_id) + "_0_" + str(self.outgoing_seq), self._encrypt_data(data))
+                    self.outgoing_seq += 1
+                except Exception as e:
+                    self._kill_self()
+                    logging.error("write thread exception: {}".format(e))
         logging.info("write thread exit")
 
 
@@ -207,17 +206,13 @@ class FTPSocksClient(secretsocks.Client):
         """Check if a client has created a handshake file.  If so, parse the file and store
         the session key"""
             # check for file with valid name
-        ftps = self._login_ftp()
-        files = list_files(ftps)
-        for f in files:
-            if self._is_ack_file(ftps, f[0]):
-                self._logout_ftp(ftps)
-                return True
-        self._logout_ftp(ftps)
+        with self.xmit_lock:
+            ftps = self.ftps
+            files = list_files(ftps)
+            for f in files:
+                if self._is_ack_file(ftps, f[0]):
+                    return True
         return False
-
-
-
 
     def _is_next_inbound_packet(self, filename):
         """Return True if is the next packet we are waiting for"""
@@ -279,12 +274,9 @@ class FTPSocksClient(secretsocks.Client):
         return ftps
 
 
-
     def _logout_ftp(self, ftps):
         ftps.quit()
         self.ftp_account_lock.release()
-
-
 
 def main(args):
     secretsocks.set_debug(True)
