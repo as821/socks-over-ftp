@@ -51,7 +51,7 @@ class FTPSocksProxy(secretsocks.Server):
         self.alive = True
         self.alive_lock = threading.Lock()
         self.ftp_account_lock = threading.Lock()    # avoid simultaneous logins with same credentials
-
+        self.xmit_lock = threading.Lock()    # avoid simultaneous logins with same credentials
 
         # process keyfile
         if pub_file is not None:
@@ -71,8 +71,8 @@ class FTPSocksProxy(secretsocks.Server):
             self.public_key = self.private_key.public_key
 
         # check for proxy descriptor files
-        ftps = self._login_ftp()
-        files = list_files(ftps)
+        self.ftps = self._login_ftp()
+        files = list_files(self.ftps)
         _min = 0        # all proxy descriptor filenames < 0
         for f in files:
             if is_proxy_descriptor(f[0]) and int(f[0]) < _min:
@@ -80,9 +80,8 @@ class FTPSocksProxy(secretsocks.Server):
 
         # create proxy descriptor file for this proxy
         self.my_proxy_id = _min - 1
-        upload_binary_data(ftps, self.my_proxy_id, generate_proxy_descriptor(self.public_key))
+        upload_binary_data(self.ftps, self.my_proxy_id, generate_proxy_descriptor(self.public_key))
         self.heart = time.time()
-        self._logout_ftp(ftps)
 
         # only have to support a single client per proxy, so just poll here until a client connects
         print("Awaiting a client connection...")
@@ -93,40 +92,33 @@ class FTPSocksProxy(secretsocks.Server):
 
         # create ACK file
         self.incoming_seq += 1
-        ftps = self._login_ftp()
-        upload_binary_data(ftps, str(self.session_id) + "_1_0", self._encrypt_data(b"ACK"))
+        upload_binary_data(self.ftps, str(self.session_id) + "_1_0", self._encrypt_data(b"ACK"))
         self.outgoing_seq += 1
-        self._logout_ftp(ftps)
 
         ### Tunnel is set up, wait for client transmissions ###
         print("Tunnel setup (session ID: {})".format(self.session_id))
         sys.stdout.flush()
         self.start()
 
-
-
-
     def recv(self):
         """"Receive data from the data channel and push it to the receive queue"""
         while self._am_i_alive():
-            ftps = None
             try:
                 # check if there is a valid tunnel file to read
                 data = None
-                ftps = self._login_ftp()
-                files = list_files(ftps)
-                for f in files:
-                    if self._is_next_inbound_packet(f[0]):
-                        # get file contents
-                        self.incoming_seq += 1
-                        data = get_file_contents(ftps, f[0])
-                        if data is None:
-                            raise ValueError("get_file_contents returned None.  Check debugging output.")
+                with self.xmit_lock:
+                    files = list_files(self.ftps)
+                    for f in files:
+                        if self._is_next_inbound_packet(f[0]):
+                            # get file contents
+                            self.incoming_seq += 1
+                            data = get_file_contents(self.ftps, f[0])
+                            if data is None:
+                                raise ValueError("get_file_contents returned None.  Check debugging output.")
 
-                        # delete file
-                        delete_file(ftps, f[0])
-                        break
-                self._logout_ftp(ftps)
+                            # delete file
+                            delete_file(self.ftps, f[0])
+                            break
 
                 # write received data to recvbuf
                 if data is not None:
@@ -137,20 +129,15 @@ class FTPSocksProxy(secretsocks.Server):
 
                 # update heartbeat if needed
                 elif self.heart + PROXY_HEARTBEAT_TIMEOUT < time.time():
-                    ftps = self._login_ftp()
-                    upload_binary_data(ftps, self.my_proxy_id, generate_proxy_descriptor(self.public_key))
-                    self.heart = time.time()
-                    self._logout_ftp(ftps)
+                    with self.xmit_lock:
+                        upload_binary_data(self.ftps, self.my_proxy_id, generate_proxy_descriptor(self.public_key))
+                        self.heart = time.time()
 
             #     time.sleep(PROXY_POLL_FREQ)   # a quick fix to allow Firefox to fetch in a reasonable amount of time
             except Exception as e:
                 self._kill_self()
                 logging.error("recv thread exception: {}".format(e))
         logging.info("recv thread exit")
-
-
-
-
 
     def write(self):
         """Take data from the write queue and send it over the data channel"""
@@ -162,48 +149,40 @@ class FTPSocksProxy(secretsocks.Server):
                 continue
 
             # send data over channel (write to file with appropriate name
-            try:
-                # create file
-                ftps = self._login_ftp()
-                upload_binary_data(ftps, str(self.session_id) + "_1_" + str(self.outgoing_seq), self._encrypt_data(data))
-                self.outgoing_seq += 1
-                self._logout_ftp(ftps)
-            except Exception as e:
-                self._kill_self()
-                logging.error("write thread exception: {}".format(e))
+            with self.xmit_lock:
+                try:
+                    upload_binary_data(self.ftps, str(self.session_id) + "_1_" + str(self.outgoing_seq), self._encrypt_data(data))
+                    self.outgoing_seq += 1
+                except Exception as e:
+                    self._kill_self()
+                    logging.error("write thread exception: {}".format(e))
         logging.info("write thread exit")
-
-
-
 
     def _poll_handshake_file(self):
         """Check if a client has created a handshake file.  If so, parse the file and store
         the session key"""
         # check for file with valid name
-        ftps = self._login_ftp()
-        files = list_files(ftps)
-        for f in files:
-            s_id, direction, seq = parse_tunnel_filename(f[0])
-            if s_id is not None and direction == 0 and seq == 0:
-                # check if contents of file is encrypted with this proxy's public key
-                data = get_file_contents(ftps, f[0])
-                try:
-                    # attempt to decrypt the received message
-                    unseal_box = SealedBox(self.private_key)
-                    self.session_key = unseal_box.decrypt(data)
-                    self.session_id = s_id
-                    self._logout_ftp(ftps)
-                    return
-                except Exception as e:
-                    # file contents not encrypted with proxy's key
-                    continue
+        with self.xmit_lock:
+            files = list_files(self.ftps)
+            for f in files:
+                s_id, direction, seq = parse_tunnel_filename(f[0])
+                if s_id is not None and direction == 0 and seq == 0:
+                    # check if contents of file is encrypted with this proxy's public key
+                    data = get_file_contents(self.ftps, f[0])
+                    try:
+                        # attempt to decrypt the received message
+                        unseal_box = SealedBox(self.private_key)
+                        self.session_key = unseal_box.decrypt(data)
+                        self.session_id = s_id
+                        return
+                    except Exception as e:
+                        # file contents not encrypted with proxy's key
+                        continue
 
-        # update heartbeat if needed
-        if self.heart + PROXY_HEARTBEAT_TIMEOUT < time.time():
-            upload_binary_data(ftps, self.my_proxy_id, generate_proxy_descriptor(self.public_key))
-            self.heart = time.time()
-        self._logout_ftp(ftps)
-
+            # update heartbeat if needed
+            if self.heart + PROXY_HEARTBEAT_TIMEOUT < time.time():
+                upload_binary_data(self.ftps, self.my_proxy_id, generate_proxy_descriptor(self.public_key))
+                self.heart = time.time()
 
     def _encrypt_data(self, data):
         """Encrypt data with the session key"""

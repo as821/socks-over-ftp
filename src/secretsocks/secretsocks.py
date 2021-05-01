@@ -14,6 +14,17 @@ else:
     import Queue
     range = xrange
 
+def _recvall(sock, nbytes_req):
+    buf = bytearray()
+    nbytes_read = 0
+
+    while nbytes_read < nbytes_req:
+        delta = nbytes_req - nbytes_read
+        read_bytes = sock.recv(delta)
+        nbytes_read += len(read_bytes)
+        buf.extend(read_bytes)
+
+    return bytes(buf)
 
 class Client():
     CONNECT = 1
@@ -218,7 +229,7 @@ class SocksHandler():
             sock.close()
 
         # Get the request
-        ver, cmd, rsv, atyp = struct.unpack('!BBBB', sock.recv(4))
+        ver, cmd, rsv, atyp = struct.unpack('!BBBB', _recvall(sock, 4))
         dstaddr = None
         dstport = None
         if atyp == 1:
