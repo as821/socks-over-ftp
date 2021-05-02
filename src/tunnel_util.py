@@ -5,6 +5,7 @@ import yaml
 
 
 PROXY_HEARTBEAT_TIMEOUT = 300   # 5 minutes
+CLIENT_TIMEOUT = 1200           # 20 minute wait
 
 
 

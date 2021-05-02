@@ -143,9 +143,14 @@ class FTPSocksClient(secretsocks.Client):
                     d = self._decrypt_data(data)
                     self.recvbuf.put(d)
                 elif time.time()  > self.heartbeat + PROXY_HEARTBEAT_TIMEOUT:
-                    # channel has timed out
-                    raise ValueError("channel has timed out")
-            #     time.sleep(CLIENT_POLL_FREQ)      # a quick fix to allow Firefox to fetch in a reasonable amount of time
+                    # channel has timed out, check if proxy has updated its heartbeat
+                    with self.xmit_lock:
+                        key, self.heartbeat = parse_proxy_descriptor(get_file_contents(self.ftps, str(self.proxy_id)))
+                        if self.heartbeat is not None:
+                            if time.time() > self.heartbeat + PROXY_HEARTBEAT_TIMEOUT:
+                                raise ValueError("channel has timed out")
+                        else:
+                            raise ValueError("channel has timed out")
             except Exception as e:
                 self._kill_self()
                 logging.error("recv thread exception: {}".format(e))

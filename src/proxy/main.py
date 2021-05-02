@@ -6,7 +6,7 @@ import threading
 
 from ftplib import FTP, FTP_TLS, all_errors, error_perm
 from ftp_util import list_files, upload_binary_data, get_file_contents, delete_file
-from tunnel_util import is_proxy_descriptor, generate_proxy_descriptor, parse_tunnel_filename, PROXY_HEARTBEAT_TIMEOUT
+from tunnel_util import is_proxy_descriptor, generate_proxy_descriptor, parse_tunnel_filename, PROXY_HEARTBEAT_TIMEOUT, CLIENT_TIMEOUT
 import secretsocks
 
 import nacl.utils
@@ -46,6 +46,7 @@ class FTPSocksProxy(secretsocks.Server):
         self.private_key = None
         self.session_id = None
 
+        self.last_recv = -1
         self.outgoing_seq = 0
         self.incoming_seq = 0
         self.alive = True
@@ -97,6 +98,7 @@ class FTPSocksProxy(secretsocks.Server):
 
         ### Tunnel is set up, wait for client transmissions ###
         print("Tunnel setup (session ID: {})".format(self.session_id))
+        self.last_recv = time.time()
         sys.stdout.flush()
         self.start()
 
@@ -126,6 +128,7 @@ class FTPSocksProxy(secretsocks.Server):
                     print(d)
                     sys.stdout.flush()
                     self.recvbuf.put(d)
+                    self.last_recv = time.time()
 
                 # update heartbeat if needed
                 elif self.heart + PROXY_HEARTBEAT_TIMEOUT < time.time():
@@ -133,7 +136,10 @@ class FTPSocksProxy(secretsocks.Server):
                         upload_binary_data(self.ftps, self.my_proxy_id, generate_proxy_descriptor(self.public_key))
                         self.heart = time.time()
 
-            #     time.sleep(PROXY_POLL_FREQ)   # a quick fix to allow Firefox to fetch in a reasonable amount of time
+                # check if connection has timed out
+                if self.last_recv + CLIENT_TIMEOUT < time.time():
+                    raise ValueError("client has timed out")
+
             except Exception as e:
                 self._kill_self()
                 logging.error("recv thread exception: {}".format(e))
@@ -248,8 +254,8 @@ def main(args):
                             args.password,
                             args.use_plain,
                             'xfer')
-    while True:     # busy wait
-        time.sleep(60)
+    while client._am_i_alive():     # busy wait
+        time.sleep(10)
 
 def parse_args():
     parser = argparse.ArgumentParser()

@@ -288,4 +288,5 @@ class Listener(asyncore.dispatcher):
             handle = self.handler.new_request(sock, addr, self.client)
 
     def wait(self):
+        # TODO have to add a check on client._am_i_alive so this thread dies with the others
         asyncore.loop()
