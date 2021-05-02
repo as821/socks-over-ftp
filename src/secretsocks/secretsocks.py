@@ -288,5 +288,13 @@ class Listener(asyncore.dispatcher):
             handle = self.handler.new_request(sock, addr, self.client)
 
     def wait(self):
-        # TODO have to add a check on client._am_i_alive so this thread dies with the others
         asyncore.loop()
+
+    # def writable(self):
+    #     if not self.client._am_i_alive():
+    #         # this function is polled by asyncore, so it works for terminating this Listener thread
+    #         # if other threads have error, end this thread too.  Without this, this thread hangs
+    #         # while the read/write threads have already stopped
+    #         self.close()
+    #         sys.exit()
+    #     return True

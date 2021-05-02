@@ -125,7 +125,6 @@ class FTPSocksProxy(secretsocks.Server):
                 # write received data to recvbuf
                 if data is not None:
                     d = self._decrypt_data(data)
-                    print(d)
                     sys.stdout.flush()
                     self.recvbuf.put(d)
                     self.last_recv = time.time()
@@ -248,7 +247,7 @@ class FTPSocksProxy(secretsocks.Server):
         self.ftp_account_lock.release()
 
 def main(args):
-    secretsocks.set_debug(True)
+    secretsocks.set_debug(args.socks_debug)
     client = FTPSocksProxy(args.server_ipv4_addr,
                             args.username,
                             args.password,
@@ -263,6 +262,7 @@ def parse_args():
     parser.add_argument("username")
     parser.add_argument("password")
     parser.add_argument("--use_plain", action="store_true", default=False)
+    parser.add_argument("--socks-debug", action="store_true", default=False)
     return parser.parse_args()
 
 if __name__ == '__main__':

@@ -108,6 +108,13 @@ class FTPSocksClient(secretsocks.Client):
             time.sleep(CLIENT_POLL_FREQ)
         self.incoming_seq += 1
 
+        # client is the last component waiting for an ACK in the handshake
+        # it should perform clean up of channel init files (with the exception of the proxy descriptor)
+        with self.xmit_lock:
+            ftps = self.ftps
+            delete_file(ftps, filename)                     # <session ID>_0_0
+            delete_file(ftps, self.session_id + "_1_0")     # <session ID>_1_0
+
         ### Tunnel is set up ###
         print("Tunnel set up (proxy id: {})".format(self.proxy_id))
         sys.stdout.flush()
@@ -243,12 +250,10 @@ class FTPSocksClient(secretsocks.Client):
         self.alive_lock.release()
 
 
-
     def _encrypt_data(self, data):
         """Encrypt data with the session key"""
         session_box = nacl.secret.SecretBox(self.session_key)
         d =  session_box.encrypt(data)
-        print(data)
         sys.stdout.flush()
         return d
 
@@ -257,8 +262,6 @@ class FTPSocksClient(secretsocks.Client):
         """Decrypt data with the session key"""
         session_box = nacl.secret.SecretBox(self.session_key)
         return session_box.decrypt(data)
-
-
 
 
     def _login_ftp(self):
@@ -284,7 +287,7 @@ class FTPSocksClient(secretsocks.Client):
         self.ftp_account_lock.release()
 
 def main(args):
-    secretsocks.set_debug(True)
+    secretsocks.set_debug(args.socks_debug)
     client = FTPSocksClient(args.server_ipv4_addr,
                             args.username,
                             args.password,
@@ -302,6 +305,7 @@ def parse_args():
     parser.add_argument("username")
     parser.add_argument("password")
     parser.add_argument("--use_plain", action="store_true", default=False)
+    parser.add_argument("--socks-debug", action="store_true", default=False)
     return parser.parse_args()
 
 if __name__ == '__main__':
