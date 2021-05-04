@@ -241,6 +241,7 @@ class SocksHandler():
             if type(dstaddr) == bytes:
                 dstaddr = dstaddr.decode('utf8')
             dstport, = struct.unpack('!H', sock.recv(2))
+            print("Making proxied request to {}:{}".format(dstaddr, dstport))
         #TODO: ipv6 addr support
         #elif atyp = 4:
         else:
