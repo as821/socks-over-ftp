@@ -1,0 +1,18 @@
+\begin{tikzpicture}
+
+\node[draw] (a) at (0,0) {Web Client};
+\node[draw, right = 2cm of a] (b) {FTP Server};
+\node[draw, right = 2cm of b] (c) {Proxy};
+\node[draw, right = 2cm of c] (d) {Web Server};
+
+\node[above = 0.75cm of b] () {SOCKS};
+
+\draw [to-to,line width=1pt](a) -- (b) node [midway, fill=white, below=0.5cm] {FTP};
+\draw [to-to,line width=1pt](b) -- (c) node [midway, fill=white, below=0.5cm] (mid) {FTP};
+\draw [to-to,line width=1pt](c) -- (d) node [midway, fill=white, below=0.5cm] {HTTP};
+\draw [to-to,line width=1pt, dashed](a) to [out=45,in=135] (c);
+\draw [to-to,line width=1pt, dashed](a) to [out=90,in=90] (d);
+
+\node[above = 3.25cm of mid] () {HTTP};
+
+\end{tikzpicture}

@@ -1,0 +1,112 @@
+\begin{thebibliography}{10}
+
+\bibitem{us-code18-2510}
+{U.S. Code Title 18 PART I CHAPTER 119 \S 2510}.
+\newblock \url{https://www.law.cornell.edu/uscode/text/18/2510}.
+
+\bibitem{deltashaper}
+Diogo Barradas, Nuno Santos, and Lu{\'{\i}}s E.~T. Rodrigues.
+\newblock {DeltaShaper: Enabling Unobservable Censorship-resistant {TCP}
+  Tunneling over Videoconferencing Streams}.
+\newblock {\em Proceedings on Privacy Enhancing Technologies}, 2017, 2017.
+
+\bibitem{cloudtransport}
+Chad Brubaker, Amir Houmansadr, and Vitaly Shmatikov.
+\newblock {CloudTransport: Using Cloud Storage for Censorship-Resistant
+  Networking}.
+\newblock In {\em Privacy Enhancing Technologies - 14th International
+  Symposium, {PETS}}, volume 8555 of {\em Lecture Notes in Computer Science}.
+  Springer, 2014.
+
+\bibitem{tor}
+Roger Dingledine, Nick Mathewson, and Paul~F. Syverson.
+\newblock {Tor: The Second-Generation Onion Router}.
+\newblock In {\em Proceedings of the 13th {USENIX} Security Symposium}.
+  {USENIX}, 2004.
+
+\bibitem{fte}
+Kevin~P. Dyer, Scott~E. Coull, Thomas Ristenpart, and Thomas Shrimpton.
+\newblock {Protocol Misidentification Made Easy with Format-Transforming
+  Encryption}.
+\newblock In {\em 2013 {ACM} {SIGSAC} Conference on Computer and Communications
+  Security, CCS'13}. {ACM}, 2013.
+
+\bibitem{ftpsrfc}
+P.~Ford-Hutchinson.
+\newblock {Securing FTP with TLS}.
+\newblock RFC 4217, 2005.
+
+\bibitem{sftp-draft}
+J.~Galbraith, VanDyke Software, O.~Saarenmaa, and F-Secure.
+\newblock {SSH File Transfer Protocol}.
+\newblock Internet-draft, 2007.
+
+\bibitem{castle}
+Bridger Hahn, Rishab Nithyanand, Phillipa Gill, and Rob Johnson.
+\newblock {Games without Frontiers: Investigating Video Games as a Covert
+  Channel}.
+\newblock In {\em {IEEE} European Symposium on Security and Privacy,
+  EuroS{\&}P}. {IEEE}, 2016.
+
+\bibitem{freewave}
+Amir Houmansadr, Thomas~J. Riedl, Nikita Borisov, and Andrew~C. Singer.
+\newblock {I Want my Voice to be Heard: {IP} over Voice-over-IP for
+  Unobservable Censorship Circumvention}.
+\newblock In {\em 20th Annual Network and Distributed System Security
+  Symposium, {NDSS}}. The Internet Society, 2013.
+
+\bibitem{sweet}
+Amir Houmansadr, Wenxuan Zhou, Matthew Caesar, and Nikita Borisov.
+\newblock {{SWEET:} Serving the Web by Exploiting Email Tunnels}.
+\newblock {\em {IEEE/ACM} Trans. Netw.}, 25, 2017.
+
+\bibitem{socksrfc}
+M.~Leech, M.~Ganis, Y.~Lee, R.~Kuris, D.~Koblas, and L.~Jones.
+\newblock {SOCKS Protocol Version 5}.
+\newblock RFC 1928, 1996.
+
+\bibitem{mailet}
+Shuai Li and Nicholas Hopper.
+\newblock {Mailet: Instant Social Networking under Censorship}.
+\newblock {\em Proceedings on Privacy Enhancing Technologies}, 2016, 2016.
+
+\bibitem{facet}
+Shuai Li, Mike Schliep, and Nick Hopper.
+\newblock {Facet: Streaming over Videoconferencing for Censorship
+  Circumvention}.
+\newblock In {\em Proceedings of the 13th Workshop on Privacy in the Electronic
+  Society, {WPES}}. {ACM}, 2014.
+
+\bibitem{skypemorph}
+Hooman~Mohajeri Moghaddam, Baiyu Li, Mohammad Derakhshani, and Ian Goldberg.
+\newblock {SkypeMorph: Protocol Obfuscation for Tor Bridges}.
+\newblock In Ting Yu, George Danezis, and Virgil~D. Gligor, editors, {\em the
+  {ACM} Conference on Computer and Communications Security, CCS'12,}. {ACM},
+  2012.
+
+\bibitem{bro}
+Vern Paxson.
+\newblock {Bro: {A} System for Detecting Network Intruders in Real-Time}.
+\newblock In {\em Proceedings of the 7th {USENIX} Security Symposium}. {USENIX}
+  Association, 1998.
+
+\bibitem{ftprfc}
+J.~Postel and J.~Reynolds.
+\newblock {FILE TRANSFER PROTOCOL (FTP)}.
+\newblock RFC 959, 1985.
+
+\bibitem{rook}
+Paul Vines and Tadayoshi Kohno.
+\newblock {Rook: Using Video Games as a Low-Bandwidth Censorship Resistant
+  Communication Platform}.
+\newblock In {\em Proceedings of the 14th {ACM} Workshop on Privacy in the
+  Electronic Society, {WPES}}. {ACM}, 2015.
+
+\bibitem{scramblesuit}
+Philipp Winter, Tobias Pulls, and J{\"{u}}rgen Fu{\ss}.
+\newblock {ScrambleSuit: A Polymorphic Network Protocol to Circumvent
+  Censorship}.
+\newblock In {\em Proceedings of the 12th annual {ACM} Workshop on Privacy in
+  the Electronic Society, {WPES}}. {ACM}, 2013.
+
+\end{thebibliography}
